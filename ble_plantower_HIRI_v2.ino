@@ -1,37 +1,28 @@
 /* 
   Proyecto HIRI usando BLE - Versión 0.02
   Descripción:
-  Este proyecto utiliza un ESP32 C3  para recolectar datos del sensor plantower 5003st y transmitirlos vía BLE.
-  También incluye una pantalla OLED para mostrar información (solo para debug) y un NeoPixel para indicadores visuales.
-  
-  Cambios a Implementar:
-  
-  1. **Comunicación BLE:**
-     - Implementar la recepción de datos de latitud y longitud desde una app móvil. Estos datos serán enviados vía BLE
-       y serán utilizados para ubicar la posición geográfica del dispositivo.
+  Este proyecto utiliza un ESP32 C3 para recolectar datos del sensor plantower 5003st y transmitirlos vía BLE.
+  También incluye una pantalla OLED para mostrar información y un NeoPixel para indicadores visuales.
 
-  2. **Gestión de Datos y SD:**
-     - Cambiar la forma de guardar los datos:
-       - Utilizar un archivo CSV para registrar los datos de cada sesión, incluyendo una estructura clara para 
-         poder procesarlos posteriormente (tiempo, voltaje, PM2.5, temperatura, humedad, coordenadas GPS, estado BLE, etc.).
-       - Guardar la sesión con un nombre diferente si el dispositivo está "conectado" o "no conectado". 
-       - Incluir una lógica para diferenciar entre sesiones (por ejemplo, usando el timestamp como parte del nombre del archivo).
-  
-  3. **Indicador de Conexión BLE:**
-     - Implementar un sistema de indicadores claros para el estado de conexión BLE:
-       - Utilizar el NeoPixel para indicar cuando el dispositivo está conectado (verde) o no (rojo).
-       - En la pantalla OLED, mostrar si la conexión BLE está activa.
-  
-  4. **Tareas Adicionales:**
-     - Gestionar los datos de consumo de batería y entrar en modo deep sleep cuando la batería esté por debajo de un umbral seguro.
-     - Implementar cambios para indicar si el dispositivo está "conectado" o "desconectado" durante la sesión y 
-       guardar estos estados de forma clara en el archivo CSV.
+  Historial de Cambios (15/10/2025):
+  - Se implementó un RTC (DS3231) como fuente de tiempo de respaldo cuando no hay conexión BLE.
+  - Se ajustó el primer mensaje BLE enviado al conectar.
+  - Se mejoró la gestión de datos guardados en la microSD.
+  - Se implementó la recepción de latitud, longitud y timestamp desde la app.
+  - Se añadió un indicador visual en OLED y NeoPixel para el estado de la conexión BLE.
+  - Se implementó el modo de sueño profundo (deep sleep) cuando la batería está baja.
 
-  Fecha: 11/09/2024
+  Tareas Pendientes / Mejoras:
+  1. **Gestión de Archivos en SD:**
+     - Modificar la lógica para crear un nuevo archivo CSV para cada sesión de medición, en lugar de añadir todo a un único archivo. 
+       El nombre del archivo podría basarse en el `sesionID` o el `timestamp` inicial.
+     - Escribir una fila de encabezado (ej: "timestamp,lat,lon,pm25,...") al crear un nuevo archivo para que sea un CSV estándar.
+
+  2. **Registro de Datos:**
+     - Añadir una columna en el archivo CSV para registrar explícitamente el estado de la conexión BLE ("Conectado" o "Desconectado") en cada medición.
+
+  Fecha Original: 11/09/2024
   Autor: Alejandro Rebolledo D.
-  Fecha: 12/12/2024
-  se han hecho cambios en la respuesta del mensaje, el primer mensaje sera el de los datos del sensor estos se hicieron manualmente en el registro de una tabla
-  adjunto en la pestaña a demas de gestionar de mejor manera los datos en la microsd
 */
 /*
 tabla del primer dato para hacer guardado con la app

@@ -7,6 +7,7 @@ Este proyecto utiliza un microcontrolador ESP32-C3 para recolectar datos de un s
 - **Sensor de Partículas:** Mide concentraciones de material particulado PM1.0, PM2.5 y PM10, además de temperatura y humedad, utilizando un sensor Plantower PMS5003ST.
 - **Conectividad BLE:** Publica un servicio BLE que permite a una aplicación móvil conectarse, enviar datos (como coordenadas GPS y timestamp) y recibir mediciones del sensor.
 - **Almacenamiento en SD:** Guarda los datos de las mediciones en una tarjeta microSD en formato de texto. Cada línea contiene información de la muestra, incluyendo lecturas del sensor, datos de la app, y voltaje de la batería.
+- **Reloj de Tiempo Real (RTC):** Utiliza un módulo RTC DS3231 para mantener la hora exacta. Si el dispositivo no está conectado a una app por BLE, usa la hora del RTC para el registro de datos, asegurando un timestamp preciso.
 - **Pantalla OLED:** Muestra en tiempo real el voltaje de la batería, las lecturas de PM2.5, temperatura, humedad y el estado de la conexión BLE.
 - **Indicadores Visuales:** Un LED NeoPixel indica el estado del dispositivo:
   - **Arranque:** Azul
