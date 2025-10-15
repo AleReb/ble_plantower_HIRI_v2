@@ -1,0 +1,18 @@
+profiles:
+  hiriC3:
+    fqbn: esp32:esp32:ttgo-t-oi-plus:UploadSpeed=921600,CPUFreq=160,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=default,DebugLevel=none,EraseFlash=none
+    platforms:
+      - platform: esp32:esp32 (2.0.17)
+    libraries:
+      - Adafruit NeoPixel (1.12.2)
+      - EspSoftwareSerial (8.1.0)
+      - Time (1.6.1)
+      - U8g2 (2.34.22)
+      - RTClib (2.1.4)
+      - Adafruit BusIO (1.17.3)
+    programmer: ""
+    port_config:
+      baudrate: "115200"
+      bits: "8"
+      parity: none
+      stop_bits: "1"
