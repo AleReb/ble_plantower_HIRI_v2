@@ -106,7 +106,7 @@ SoftwareSerial pms5(RX, TX);  // RX, TX
 
 // Configuración de UART para GPS
 #define GPS_RX 20  // Conectar al TX del GPS
-#define GPS_TX 21  // Conectar al RX del GPS
+#define GPS_TX -1  // No usar TX para evitar conflicto con el monitor serial
 #define GPS_BAUD 9600
 HardwareSerial gpsSerial(1);
 
@@ -587,7 +587,7 @@ void setup() {
   pms5.begin(9600);
   Serial.println("[PMS] OK");
 
-  // Inicializar UART del GPS en GPIO20/GPIO21
+  // Inicializar UART del GPS. Solo se usa RX porque el ATGM336H envia NMEA continuamente.
   Serial.println("[GPS] begin");
   gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX, GPS_TX);
   Serial.println("[GPS] OK");
