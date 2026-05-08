@@ -550,10 +550,14 @@ void setup() {
     Serial.println();
   }
   // Inicializar medición de voltaje de batería
+  Serial.println("[ADC] init");
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
+  Serial.println("[ADC] OK");
 
   // Inicializar SPI para tarjeta SD
+  Serial.println("[SD] SPI init");
   spiSD.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS_PIN);
+  Serial.println("[SD] begin");
 
   if (!SD.begin(SD_CS_PIN, spiSD)) {
     // Error al inicializar la tarjeta SD
@@ -579,13 +583,17 @@ void setup() {
   }
 
   // Inicializar SoftwareSerial para el sensor PMS
+  Serial.println("[PMS] begin");
   pms5.begin(9600);
+  Serial.println("[PMS] OK");
 
   // Inicializar UART del GPS en GPIO20/GPIO21
+  Serial.println("[GPS] begin");
   gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX, GPS_TX);
+  Serial.println("[GPS] OK");
 
   // Inicializar BLE
-  Serial.println("Iniciando BLE...");
+  Serial.println("[BLE] begin");
   BLEDevice::init(DEVICE_NAME);
   BLEServer *pServer = BLEDevice::createServer();
 
