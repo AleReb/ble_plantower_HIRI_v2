@@ -104,9 +104,16 @@ class MyServerCallbacks : public BLEServerCallbacks {
 #define TX 5
 SoftwareSerial pms5(RX, TX);  // RX, TX
 
+// Configuración de UART para GPS
+#define GPS_RX 20  // Conectar al TX del GPS
+#define GPS_TX 21  // Conectar al RX del GPS
+#define GPS_BAUD 9600
+HardwareSerial gpsSerial(1);
+
 // Configuración de NeoPixel
 #define NEOPIXEL_PIN 10
-#define NUMPIXELS 1
+#define NUMPIXELS 3
+#define ACTIVE_NEOPIXELS 2
 Adafruit_NeoPixel pixels(NUMPIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 // Pines I2C depreciado no es necesario declararlos usando la placa lligo T0I Plus
@@ -165,6 +172,28 @@ String longitud;    // Position 2 -- code
 String timestamp;   // timestamp
 String sesionID;    // sensionID
 String notaEVento;  // eventos especiales
+
+// Variables para lectura GPS NMEA
+static char gpsLineBuffer[160];
+static int gpsLineIndex = 0;
+bool gpsAnySentenceReceived = false;
+bool gpsRmcSeen = false;
+bool gpsGgaSeen = false;
+bool gpsFixValid = false;
+bool gpsAntennaOpen = false;
+unsigned long gpsLastByteMs = 0;
+unsigned long gpsLastReportMs = 0;
+unsigned long gpsTotalBytes = 0;
+unsigned long gpsTotalLines = 0;
+unsigned long gpsTotalOverflow = 0;
+String gpsLastSentenceType = "";
+String gpsLastUtcTime = "";
+String gpsLastUtcDate = "";
+String gpsLastFixStatus = "";
+String gpsLastSatellites = "";
+String gpsLastHdop = "";
+String gpsLatitude = "";
+String gpsLongitude = "";
 // Callback BLE para recibir datos
 
 
@@ -225,6 +254,205 @@ uint32_t readADC_Cal(int ADC_Raw) {
   return esp_adc_cal_raw_to_voltage(ADC_Raw, &adc_chars);
 }
 
+bool splitCsvFields(const String &line, String fields[], int maxFields, int &fieldCount) {
+  fieldCount = 0;
+  int start = 0;
+
+  for (int i = 0; i <= line.length(); i++) {
+    if (i == line.length() || line[i] == ',') {
+      if (fieldCount < maxFields) {
+        fields[fieldCount] = line.substring(start, i);
+        int checksumIndex = fields[fieldCount].indexOf('*');
+        if (checksumIndex >= 0) {
+          fields[fieldCount] = fields[fieldCount].substring(0, checksumIndex);
+        }
+        fieldCount++;
+      }
+      start = i + 1;
+    }
+  }
+
+  return fieldCount > 0;
+}
+
+String nmeaCoordToDecimal(const String &rawCoord, const String &hemisphere) {
+  if (rawCoord.length() < 4 || hemisphere.length() == 0) {
+    return "";
+  }
+
+  int degreeDigits = (hemisphere == "N" || hemisphere == "S") ? 2 : 3;
+  if (rawCoord.length() <= degreeDigits) {
+    return "";
+  }
+
+  double degrees = rawCoord.substring(0, degreeDigits).toDouble();
+  double minutes = rawCoord.substring(degreeDigits).toDouble();
+  double decimal = degrees + (minutes / 60.0);
+
+  if (hemisphere == "S" || hemisphere == "W") {
+    decimal *= -1.0;
+  }
+
+  return String(decimal, 6);
+}
+
+void updateGpsDateTime(const String &utcTime, const String &utcDate) {
+  if (utcTime.length() >= 6) {
+    gpsLastUtcTime =
+      utcTime.substring(0, 2) + ":" +
+      utcTime.substring(2, 4) + ":" +
+      utcTime.substring(4, 6);
+  }
+
+  if (utcDate.length() == 6) {
+    gpsLastUtcDate =
+      utcDate.substring(0, 2) + "/" +
+      utcDate.substring(2, 4) + "/20" +
+      utcDate.substring(4, 6);
+  }
+}
+
+void parseGpsRmc(const String &sentence) {
+  String fields[20];
+  int count = 0;
+
+  gpsRmcSeen = true;
+  if (!splitCsvFields(sentence, fields, 20, count) || count < 10) {
+    return;
+  }
+
+  gpsLastFixStatus = fields[2];
+  gpsFixValid = (fields[2] == "A");
+  updateGpsDateTime(fields[1], fields[9]);
+
+  if (gpsFixValid) {
+    gpsLatitude = nmeaCoordToDecimal(fields[3], fields[4]);
+    gpsLongitude = nmeaCoordToDecimal(fields[5], fields[6]);
+
+    if (gpsLatitude.length() > 0 && gpsLongitude.length() > 0) {
+      latitud = gpsLatitude;
+      longitud = gpsLongitude;
+    }
+  }
+}
+
+void parseGpsGga(const String &sentence) {
+  String fields[20];
+  int count = 0;
+
+  gpsGgaSeen = true;
+  if (!splitCsvFields(sentence, fields, 20, count) || count < 9) {
+    return;
+  }
+
+  gpsLastSatellites = fields[7];
+  gpsLastHdop = fields[8];
+
+  if (fields[6].length() > 0 && fields[6] != "0") {
+    gpsFixValid = true;
+    gpsLatitude = nmeaCoordToDecimal(fields[2], fields[3]);
+    gpsLongitude = nmeaCoordToDecimal(fields[4], fields[5]);
+
+    if (gpsLatitude.length() > 0 && gpsLongitude.length() > 0) {
+      latitud = gpsLatitude;
+      longitud = gpsLongitude;
+    }
+  }
+}
+
+void parseGpsTxt(const String &sentence) {
+  if (sentence.indexOf("ANTENNA OPEN") >= 0) {
+    gpsAntennaOpen = true;
+  }
+}
+
+void parseGpsZda(const String &sentence) {
+  String fields[10];
+  int count = 0;
+
+  if (!splitCsvFields(sentence, fields, 10, count) || count < 5) {
+    return;
+  }
+
+  if (fields[1].length() >= 6) {
+    gpsLastUtcTime =
+      fields[1].substring(0, 2) + ":" +
+      fields[1].substring(2, 4) + ":" +
+      fields[1].substring(4, 6);
+  }
+
+  if (fields[2].length() > 0 && fields[3].length() > 0 && fields[4].length() > 0) {
+    gpsLastUtcDate = fields[2] + "/" + fields[3] + "/" + fields[4];
+  }
+}
+
+void processGpsLine(const char *rawLine) {
+  String sentence = String(rawLine);
+  sentence.trim();
+
+  if (sentence.length() == 0 || !sentence.startsWith("$")) {
+    return;
+  }
+
+  gpsAnySentenceReceived = true;
+  gpsTotalLines++;
+  gpsLastSentenceType = sentence.length() >= 6 ? sentence.substring(0, 6) : sentence;
+
+  if (sentence.startsWith("$GNRMC") || sentence.startsWith("$GPRMC")) {
+    parseGpsRmc(sentence);
+  } else if (sentence.startsWith("$GNGGA") || sentence.startsWith("$GPGGA")) {
+    parseGpsGga(sentence);
+  } else if (sentence.startsWith("$GNTXT") || sentence.startsWith("$GPTXT")) {
+    parseGpsTxt(sentence);
+  } else if (sentence.startsWith("$GNZDA") || sentence.startsWith("$GPZDA")) {
+    parseGpsZda(sentence);
+  }
+}
+
+void readGpsSerial() {
+  while (gpsSerial.available()) {
+    char c = gpsSerial.read();
+    gpsTotalBytes++;
+    gpsLastByteMs = millis();
+
+    if (c == '\n') {
+      gpsLineBuffer[gpsLineIndex] = '\0';
+      processGpsLine(gpsLineBuffer);
+      gpsLineIndex = 0;
+    } else if (c != '\r') {
+      if (gpsLineIndex < (int)sizeof(gpsLineBuffer) - 1) {
+        gpsLineBuffer[gpsLineIndex++] = c;
+      } else {
+        gpsTotalOverflow++;
+        gpsLineIndex = 0;
+      }
+    }
+  }
+}
+
+void reportGpsDebug() {
+  if (millis() - gpsLastReportMs < 5000) {
+    return;
+  }
+
+  gpsLastReportMs = millis();
+  Serial.println("----- GPS DEBUG STATUS -----");
+  Serial.println(String("GPS UART: RX=") + GPS_RX + " TX=" + GPS_TX + " baud=" + GPS_BAUD);
+  Serial.println(String("Bytes: ") + gpsTotalBytes + " Lines: " + gpsTotalLines + " Overflow: " + gpsTotalOverflow);
+  Serial.println(String("NMEA: ") + (gpsAnySentenceReceived ? "YES" : "NO") + " Last: " + gpsLastSentenceType);
+
+  if (millis() - gpsLastByteMs > 3000) {
+    Serial.println("GPS warning: no se reciben bytes hace mas de 3 segundos.");
+  }
+
+  Serial.println(String("RMC: ") + (gpsRmcSeen ? "YES" : "NO") + " GGA: " + (gpsGgaSeen ? "YES" : "NO"));
+  Serial.println(String("Fix: ") + (gpsFixValid ? "YES" : "NO") + " Status: " + gpsLastFixStatus);
+  Serial.println(String("Sat: ") + gpsLastSatellites + " HDOP: " + gpsLastHdop);
+  Serial.println(String("UTC: ") + gpsLastUtcDate + " " + gpsLastUtcTime);
+  Serial.println(String("Lat: ") + gpsLatitude + " Lon: " + gpsLongitude);
+  Serial.println(String("Antenna open: ") + (gpsAntennaOpen ? "YES" : "NO"));
+}
+
 // Variables para el consumo de batería
 const float AVERAGE_CURRENT_MA = 148.0;  // Corriente promedio en mA
 unsigned long startMillis;               // Tiempo de inicio en milisegundos
@@ -256,19 +484,24 @@ bool displayDataSaved = false;
 unsigned long dataSavedTime = 0;
 const unsigned long dataSavedDisplayTime = 2000;  // Mostrar "Data saved" por 2 segundos
 
+void setNeoPixelStatus(uint32_t color) {
+  for (int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, i < ACTIVE_NEOPIXELS ? color : 0);
+  }
+  pixels.show();
+}
+
 void fadeEffect(uint32_t originalColor) {
   for (int i = 255; i >= 0; i -= 15) {
     uint8_t r = (originalColor >> 16) & 0xFF;
     uint8_t g = (originalColor >> 8) & 0xFF;
     uint8_t b = originalColor & 0xFF;
-    pixels.setPixelColor(0, pixels.Color((r * i) / 255, (g * i) / 255, (b * i) / 255));
-    pixels.show();
+    setNeoPixelStatus(pixels.Color((r * i) / 255, (g * i) / 255, (b * i) / 255));
     delay(20);
   }
 
   // Restaurar el color original
-  pixels.setPixelColor(0, originalColor);
-  pixels.show();
+  setNeoPixelStatus(originalColor);
 }
 
 void setup() {
@@ -276,9 +509,9 @@ void setup() {
   Serial.begin(115200);
   // Inicializar NeoPixel
   pixels.begin();
-  // Inicializar LED a color azul durante el inicio
-  pixels.setPixelColor(0, pixels.Color(0, 0, 255));  // Azul
-  pixels.show();
+  // Inicializar los dos primeros NeoPixel a color azul durante el inicio.
+  // El tercer NeoPixel queda apagado/pendiente.
+  setNeoPixelStatus(pixels.Color(0, 0, 255));  // Azul
 
   // Inicializar I2C
   //Wire.begin(SDA, SCL); //depreciado no es necesario usarlo con la placa lligo T0I Plus
@@ -292,6 +525,21 @@ void setup() {
     rtcOK = false;
   } else {
     rtcOK = true;
+    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));// [para actualizar la hora con el upload del codigo]
+    DateTime now = rtc.now();
+
+    Serial.print(now.year(), DEC);
+    Serial.print('/');
+    Serial.print(now.month(), DEC);
+    Serial.print('/');
+    Serial.print(now.day(), DEC);
+    Serial.print(" HORA ");
+    Serial.print(now.hour(), DEC);
+    Serial.print(':');
+    Serial.print(now.minute(), DEC);
+    Serial.print(':');
+    Serial.print(now.second(), DEC);
+    Serial.println();
   }
   // Inicializar medición de voltaje de batería
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
@@ -309,8 +557,7 @@ void setup() {
     u8g2.drawStr(0, 8, "SD no encontrada");
     u8g2.sendBuffer();
     // Cambiar color del LED a morado para indicar error en SD
-    pixels.setPixelColor(0, pixels.Color(128, 0, 128));  // Morado
-    pixels.show();
+    setNeoPixelStatus(pixels.Color(128, 0, 128));  // Morado
   } else {
     sd_available = true;
     Serial.println("Tarjeta SD inicializada.");
@@ -320,12 +567,14 @@ void setup() {
     u8g2.drawStr(0, 8, "SD encontrada");
     u8g2.sendBuffer();
     // Cambiar color del LED a verde para indicar SD correcta
-    pixels.setPixelColor(0, pixels.Color(0, 255, 0));  // Verde
-    pixels.show();
+    setNeoPixelStatus(pixels.Color(0, 255, 0));  // Verde
   }
 
   // Inicializar SoftwareSerial para el sensor PMS
   pms5.begin(9600);
+
+  // Inicializar UART del GPS en GPIO20/GPIO21
+  gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX, GPS_TX);
 
   // Inicializar BLE
   Serial.println("Iniciando BLE...");
@@ -373,6 +622,9 @@ void setup() {
 }
 
 void loop() {
+  readGpsSerial();
+  reportGpsDebug();
+
   // Actualizar el tiempo de funcionamiento
   currentMillis = millis();
   elapsedMillis = currentMillis - startMillis;
@@ -393,8 +645,7 @@ void loop() {
       redValue = 255;
       greenValue = 0;
     }
-    pixels.setPixelColor(0, pixels.Color(redValue, greenValue, 0));
-    pixels.show();
+    setNeoPixelStatus(pixels.Color(redValue, greenValue, 0));
 
     // Reiniciar variables de parpadeo
     isBlinking = false;
@@ -424,11 +675,9 @@ void loop() {
     if (batteryVoltage < lowBat) {
       // Parpadear NeoPixel en rojo 3 veces antes de entrar en deep sleep
       for (int i = 0; i < 3; i++) {
-        pixels.setPixelColor(0, pixels.Color(255, 0, 0));  // Rojo
-        pixels.show();
+        setNeoPixelStatus(pixels.Color(255, 0, 0));  // Rojo
         delay(500);
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));  // Apagar
-        pixels.show();
+        setNeoPixelStatus(pixels.Color(0, 0, 0));  // Apagar
         delay(500);
       }
       u8g2.setPowerSave(1);
@@ -502,8 +751,7 @@ String horas = String(now.hour()) + ":" + String(now.minute()) + ":" + String(no
         // Error al abrir el archivo
         Serial.println("Error al abrir: " + dataLOG);
         // Cambiar color del LED a rojo para indicar error al guardar en SD
-        pixels.setPixelColor(0, pixels.Color(255, 0, 0));  // Rojo
-        pixels.show();
+        setNeoPixelStatus(pixels.Color(255, 0, 0));  // Rojo
       }
     }
 
@@ -658,14 +906,12 @@ void handleDisconnectionBlinking() {
           redValue = 255;
           greenValue = 0;
         }
-        pixels.setPixelColor(0, pixels.Color(redValue, greenValue, 0));
-        pixels.show();
+        setNeoPixelStatus(pixels.Color(redValue, greenValue, 0));
       } else {
         // Apagar el LED
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        setNeoPixelStatus(pixels.Color(0, 0, 0));
         blinkCount++;
       }
-      pixels.show();
 
       // Verificar si se ha completado el número de parpadeos
       if (blinkCount >= totalBlinks * 2) {  // Multiplicado por 2 porque contamos encendidos y apagados
@@ -684,8 +930,7 @@ void handleDisconnectionBlinking() {
       redValue = 255;
       greenValue = 0;
     }
-    pixels.setPixelColor(0, pixels.Color(redValue, greenValue, 0));
-    pixels.show();
+    setNeoPixelStatus(pixels.Color(redValue, greenValue, 0));
   }
 }
 
