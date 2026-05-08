@@ -46,7 +46,6 @@ HIRI-15	21	68:3,68:6,68:8,67:4,69:11,69:12
 // Incluye las librerías necesarias
 #include <Adafruit_NeoPixel.h>
 #include "esp_adc_cal.h"
-#include <SoftwareSerial.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
@@ -99,16 +98,17 @@ class MyServerCallbacks : public BLEServerCallbacks {
 // Definición de pines
 #define BAT_ADC 2  // Pin ADC para medir voltaje de batería
 
-// Configuración de SoftwareSerial para el sensor PMS5003
+// Configuración de UART para el sensor PMS5003
 #define RX 4
 #define TX 5
-SoftwareSerial pms5(RX, TX);  // RX, TX
+#define PMS_BAUD 9600
+HardwareSerial pmsSerial(1);  // RX, TX
 
 // Configuración de UART para GPS
 #define GPS_RX 20  // Conectar al TX del GPS
 #define GPS_TX -1  // No usar TX para evitar conflicto con el monitor serial
 #define GPS_BAUD 9600
-HardwareSerial gpsSerial(1);
+HardwareSerial gpsSerial(0);
 
 // Configuración de NeoPixel
 #define NEOPIXEL_PIN 10
@@ -582,9 +582,9 @@ void setup() {
     setNeoPixelStatus(pixels.Color(0, 255, 0));  // Verde
   }
 
-  // Inicializar SoftwareSerial para el sensor PMS
+  // Inicializar UART del sensor PMS
   Serial.println("[PMS] begin");
-  pms5.begin(9600);
+  pmsSerial.begin(PMS_BAUD, SERIAL_8N1, RX, TX);
   Serial.println("[PMS] OK");
 
   // Inicializar UART del GPS. Solo se usa RX porque el ATGM336H envia NMEA continuamente.
@@ -679,7 +679,7 @@ void loop() {
     checkpms = millis();
 
     // Leer datos del sensor PMS
-    if (pms5.available() > 0) {
+    if (pmsSerial.available() > 0) {
       readPMSSensor();
     }
 
@@ -822,13 +822,13 @@ String horas = String(now.hour()) + ":" + String(now.minute()) + ":" + String(no
 }
 
 void readPMSSensor() {
-  while (pms5.available() > 0) {
+  while (pmsSerial.available() > 0) {
     for (int i = 0; i < 32; i++) {
-      bufferRTT[i] = (char)pms5.read();
+      bufferRTT[i] = (char)pmsSerial.read();
       delay(2);
     }
 
-    pms5.flush();
+    pmsSerial.flush();
 
     unsigned int CR1 = (bufferRTT[30] << 8) + bufferRTT[31];
     unsigned int CR2 = 0;
