@@ -194,6 +194,7 @@ String gpsLastSatellites = "";
 String gpsLastHdop = "";
 String gpsLatitude = "";
 String gpsLongitude = "";
+String gpsSpeedKmh = "";
 // Callback BLE para recibir datos
 
 
@@ -328,6 +329,7 @@ void parseGpsRmc(const String &sentence) {
   if (gpsFixValid) {
     gpsLatitude = nmeaCoordToDecimal(fields[3], fields[4]);
     gpsLongitude = nmeaCoordToDecimal(fields[5], fields[6]);
+    gpsSpeedKmh = String(fields[7].toFloat() * 1.852, 1);
 
     if (gpsLatitude.length() > 0 && gpsLongitude.length() > 0) {
       latitud = gpsLatitude;
@@ -449,7 +451,7 @@ void reportGpsDebug() {
   Serial.println(String("Fix: ") + (gpsFixValid ? "YES" : "NO") + " Status: " + gpsLastFixStatus);
   Serial.println(String("Sat: ") + gpsLastSatellites + " HDOP: " + gpsLastHdop);
   Serial.println(String("UTC: ") + gpsLastUtcDate + " " + gpsLastUtcTime);
-  Serial.println(String("Lat: ") + gpsLatitude + " Lon: " + gpsLongitude);
+  Serial.println(String("Lat: ") + gpsLatitude + " Lon: " + gpsLongitude + " Vel: " + gpsSpeedKmh + " km/h");
   Serial.println(String("Antenna open: ") + (gpsAntennaOpen ? "YES" : "NO"));
 }
 
@@ -483,10 +485,16 @@ unsigned long blinkSequenceInterval = 20000;  // Intervalo entre secuencias de p
 bool displayDataSaved = false;
 unsigned long dataSavedTime = 0;
 const unsigned long dataSavedDisplayTime = 2000;  // Mostrar "Data saved" por 2 segundos
+const unsigned long gpsDisplayInterval = 10000;   // Mostrar GPS cada 10 segundos si hay fix
+const unsigned long gpsDisplayTime = 3000;        // Duracion de la vista GPS en pantalla
 
 void setNeoPixelStatus(uint32_t color) {
   for (int i = 0; i < NUMPIXELS; i++) {
-    pixels.setPixelColor(i, i < ACTIVE_NEOPIXELS ? color : 0);
+    if (i < ACTIVE_NEOPIXELS) {
+      pixels.setPixelColor(i, color);
+    } else {
+      pixels.setPixelColor(i, gpsFixValid ? pixels.Color(0, 255, 0) : 0);
+    }
   }
   pixels.show();
 }
@@ -832,6 +840,20 @@ void readPMSSensor() {
 void displayData() {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_5x8_tr);
+
+  if (gpsFixValid && gpsLatitude.length() > 0 && gpsLongitude.length() > 0 && (millis() % gpsDisplayInterval) < gpsDisplayTime) {
+    String latLine = "Lat:" + gpsLatitude;
+    String lonLine = "Lon:" + gpsLongitude;
+    String speedLine = "Vel:" + gpsSpeedKmh + "km/h";
+
+    u8g2.drawStr(0, 8, "GPS FIX");
+    u8g2.drawStr(0, 16, latLine.c_str());
+    u8g2.drawStr(0, 24, lonLine.c_str());
+    u8g2.drawStr(0, 32, speedLine.c_str());
+    u8g2.sendBuffer();
+    return;
+  }
+
   char buf[20];
   sprintf(buf, "Bat: %.2fV", batteryVoltage);
   u8g2.drawStr(0, 8, buf);
