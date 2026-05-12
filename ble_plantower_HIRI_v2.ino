@@ -106,7 +106,7 @@ HardwareSerial pmsSerial(1);  // RX, TX
 
 // Configuración de UART para GPS
 #define GPS_RX 20  // Conectar al TX del GPS
-#define GPS_TX -1  // No usar TX para evitar conflicto con el monitor serial
+#define GPS_TX 21  // Conectar al RX del GPS si se necesita enviar comandos
 #define GPS_BAUD 9600
 HardwareSerial gpsSerial(0);
 
@@ -485,8 +485,8 @@ unsigned long blinkSequenceInterval = 20000;  // Intervalo entre secuencias de p
 bool displayDataSaved = false;
 unsigned long dataSavedTime = 0;
 const unsigned long dataSavedDisplayTime = 2000;  // Mostrar "Data saved" por 2 segundos
-const unsigned long gpsDisplayInterval = 10000;   // Mostrar GPS cada 10 segundos si hay fix
-const unsigned long gpsDisplayTime = 3000;        // Duracion de la vista GPS en pantalla
+const unsigned long gpsDisplayInterval = 10000;   // Alternar a vista GPS cada 10 segundos
+const unsigned long gpsDisplayTime = 4000;        // Duracion de la vista GPS en pantalla
 
 void setNeoPixelStatus(uint32_t color) {
   for (int i = 0; i < NUMPIXELS; i++) {
@@ -845,20 +845,73 @@ void readPMSSensor() {
   }
 }
 
+void drawStrMax(int x, int y, String text, int maxChars) {
+  if (text.length() > maxChars) {
+    text = text.substring(0, maxChars);
+  }
+  u8g2.drawStr(x, y, text.c_str());
+}
+
+void displayGpsData() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_5x8_tr);
+
+  String line1 = "GPS ";
+  if (gpsFixValid) {
+    line1 += "FIX";
+  } else if (gpsAnySentenceReceived) {
+    line1 += "NO FIX";
+  } else {
+    line1 += "SIN DATOS";
+  }
+
+  if (gpsLastSatellites.length() > 0) {
+    line1 += " Sat:" + gpsLastSatellites;
+  }
+
+  String line2 = "B:" + String(gpsTotalBytes) + " L:" + String(gpsTotalLines);
+  if (gpsLastSentenceType.length() > 0) {
+    line2 += " " + gpsLastSentenceType;
+  }
+
+  String line3;
+  if (gpsFixValid && gpsLatitude.length() > 0) {
+    line3 = "Lat:" + gpsLatitude;
+  } else if (gpsLastUtcTime.length() > 0) {
+    line3 = "UTC:" + gpsLastUtcTime;
+  } else if (gpsLastByteMs > 0) {
+    line3 = "Ult byte:" + String((millis() - gpsLastByteMs) / 1000) + "s";
+  } else {
+    line3 = "Revisar RX/TX GPS";
+  }
+
+  String line4;
+  if (gpsFixValid && gpsLongitude.length() > 0) {
+    line4 = "Lon:" + gpsLongitude;
+    if (gpsSpeedKmh.length() > 0) {
+      line4 += " V:" + gpsSpeedKmh;
+    }
+  } else if (gpsLastFixStatus.length() > 0) {
+    line4 = "Status:" + gpsLastFixStatus + " HDOP:" + gpsLastHdop;
+  } else if (gpsAntennaOpen) {
+    line4 = "Antena abierta";
+  } else {
+    line4 = "UART RX:" + String(GPS_RX) + " TX:" + String(GPS_TX);
+  }
+
+  drawStrMax(0, 8, line1, 25);
+  drawStrMax(0, 16, line2, 25);
+  drawStrMax(0, 24, line3, 25);
+  drawStrMax(0, 32, line4, 25);
+  u8g2.sendBuffer();
+}
+
 void displayData() {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_5x8_tr);
 
-  if (gpsFixValid && gpsLatitude.length() > 0 && gpsLongitude.length() > 0 && (millis() % gpsDisplayInterval) < gpsDisplayTime) {
-    String latLine = "Lat:" + gpsLatitude;
-    String lonLine = "Lon:" + gpsLongitude;
-    String speedLine = "Vel:" + gpsSpeedKmh + "km/h";
-
-    u8g2.drawStr(0, 8, "GPS FIX");
-    u8g2.drawStr(0, 16, latLine.c_str());
-    u8g2.drawStr(0, 24, lonLine.c_str());
-    u8g2.drawStr(0, 32, speedLine.c_str());
-    u8g2.sendBuffer();
+  if ((millis() % gpsDisplayInterval) < gpsDisplayTime) {
+    displayGpsData();
     return;
   }
 

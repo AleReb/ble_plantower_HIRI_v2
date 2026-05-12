@@ -27,6 +27,43 @@ Este proyecto utiliza un microcontrolador ESP32-C3 para recolectar datos de un s
 - LED RGB direccionable (NeoPixel).
 - Batería LiPo para alimentación.
 
+## Mapa de Pines
+
+Placa configurada en Arduino: `esp32:esp32:ttgo-t-oi-plus` (LilyGO / TTGO T-OI Plus, ESP32-C3).
+
+### Pines ocupados por este proyecto
+
+| GPIO | Uso | Definición / origen | Nota |
+| --- | --- | --- | --- |
+| GPIO2 | Medición de batería | `BAT_ADC` | ADC para voltaje de batería. |
+| GPIO4 | RX Plantower PMS5003ST | `RX` | UART del sensor PMS. Conectar al TX del PMS. |
+| GPIO5 | TX Plantower PMS5003ST | `TX` | UART del sensor PMS. Conectar al RX del PMS si se usa. |
+| GPIO6 | SD MOSI | `SD_MOSI` | Bus SPI de microSD. |
+| GPIO7 | SD MISO | `SD_MISO` | Bus SPI de microSD. |
+| GPIO8 | SD SCLK | `SD_SCLK` | Bus SPI de microSD. |
+| GPIO9 | SD CS | `SD_CS_PIN` | Chip select de microSD. |
+| GPIO10 | NeoPixel | `NEOPIXEL_PIN` | Control de LEDs RGB direccionables. |
+| GPIO18 | I2C SCL | Pin por defecto de la variante | Usado por OLED SH1106 y RTC DS3231. |
+| GPIO19 | I2C SDA | Pin por defecto de la variante | Usado por OLED SH1106 y RTC DS3231. |
+| GPIO20 | RX GPS | `GPS_RX` | Conectar al TX del GPS. También es `RX` por defecto de la placa. |
+| GPIO21 | Serial TX por defecto | Variante `ttgo-t-oi-plus` | No usado directamente por el sketch, pero conviene reservarlo si se usa UART/monitor serial. |
+
+### Pines libres recomendados
+
+| GPIO | Estado | Nota |
+| --- | --- | --- |
+| GPIO0 | Libre | Disponible para señales digitales si está accesible en la placa. |
+| GPIO1 | Libre | Disponible para señales digitales si está accesible en la placa. |
+| GPIO3 | Libre con cuidado | La variante lo define como `LED_BUILTIN`; puede estar conectado al LED integrado. |
+
+### Pines no recomendados
+
+| GPIO | Motivo |
+| --- | --- |
+| GPIO11 a GPIO17 | En ESP32-C3 normalmente están asociados internamente a flash/SPI; no contarlos como pines libres para periféricos externos. |
+
+La conexión GPS actual esperada es `TX del GPS -> GPIO20` y `RX del GPS -> GPIO21`. Si el monitor serial usa UART en vez de USB CDC, evitar compartir `GPIO20/GPIO21` con el GPS.
+
 ## Autor
 
 - **Alejandro Rebolledo**
