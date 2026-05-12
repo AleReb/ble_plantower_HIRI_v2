@@ -514,7 +514,7 @@ void fadeEffect(uint32_t originalColor) {
 
 void setup() {
   // Inicializar Serial
-  Serial.begin(115200);
+  Serial.begin(9600);
   // Inicializar NeoPixel
   pixels.begin();
   // Inicializar los dos primeros NeoPixel a color azul durante el inicio.
@@ -720,6 +720,10 @@ void loop() {
     }
     // Guardar los datos en la tarjeta SD
   if (sd_available) {
+   String savedLat = (gpsFixValid && gpsLatitude.length() > 0) ? gpsLatitude : latitud;
+   String savedLon = (gpsFixValid && gpsLongitude.length() > 0) ? gpsLongitude : longitud;
+   String gpsStatus = gpsFixValid ? "FIX" : (gpsAnySentenceReceived ? "NMEA_NO_FIX" : "NO_DATA");
+
    if(rtcOK == true && deviceConnected == false) {
     DateTime now = rtc.now();
   // Crear un string para la fecha
@@ -729,7 +733,8 @@ String horas = String(now.hour()) + ":" + String(now.minute()) + ":" + String(no
 
           // Crear un string con toda la información que deseas guardar
      dataString = "Tiempo: " + String(millis()) 
-      + ", Latitud: " + latitud + ", Longitud: " + longitud + ", Timestamp: " + String(now.unixtime()) 
+      + ", Latitud: " + savedLat + ", Longitud: " + savedLon + ", Timestamp: " + String(now.unixtime()) 
+      + ", GPS: " + gpsStatus + ", Sat: " + gpsLastSatellites + ", HDOP: " + gpsLastHdop
       + ", SesionID: " + sesionID + ", Evento: " + notaEVento + ", Fecha: " + fecha + ", Hora: " + horas 
       + ", Bat: " + String(batteryVoltage, 2) + "V"+ ", PM2.5: " + String(PMS2_5)  + ", PM10: " + String(PMS10) + " ug/m3" 
       + ", Temp: " + String(TPS / 10) + "." + String(TPS % 10) + "C" + ", Hum: " + String(HDS / 10) + "." + String(HDS % 10) + "%";
@@ -737,7 +742,8 @@ String horas = String(now.hour()) + ":" + String(now.minute()) + ":" + String(no
       Serial.println("usando hora del celular");
        // Crear un string con toda la información que deseas guardar
      dataString = "Tiempo: " + String(millis()) 
-      + ", Latitud: " + latitud + ", Longitud: " + longitud + ", Timestamp: " + timestamp 
+      + ", Latitud: " + savedLat + ", Longitud: " + savedLon + ", Timestamp: " + timestamp 
+      + ", GPS: " + gpsStatus + ", Sat: " + gpsLastSatellites + ", HDOP: " + gpsLastHdop
       + ", SesionID: " + sesionID + ", Evento: " + notaEVento + ", Fecha: " + fecha + ", Hora: " + horas 
       + ", Bat: " + String(batteryVoltage, 2) + "V"+ ", PM2.5: " + String(PMS2_5)  + ", PM10: " + String(PMS10) + " ug/m3" 
       + ", Temp: " + String(TPS / 10) + "." + String(TPS % 10) + "C" + ", Hum: " + String(HDS / 10) + "." + String(HDS % 10) + "%";
