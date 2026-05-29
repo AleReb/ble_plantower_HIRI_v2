@@ -151,7 +151,7 @@ String dataString = "";// Variable para construir la línea de datos a guardar
 // Variables BLE
 #define VERSION "V0.02.2"
 #define DEVICE_NAME "HIRI-02" /////////////////////////// cambiar segun el numero de dispositivo ya esta cargada la configuracion del primer mensaje segun la tabla
-String dataLOG = "/" + String(DEVICE_NAME) + ".csv";
+String dataLOG = "";
 String id = DEVICE_NAME;
 
 bool firstConect = true;
@@ -512,6 +512,54 @@ void fadeEffect(uint32_t originalColor) {
   setNeoPixelStatus(originalColor);
 }
 
+String twoDigits(int value) {
+  if (value < 10) {
+    return "0" + String(value);
+  }
+  return String(value);
+}
+
+String buildLogFileName(int sequenceNumber) {
+  String fileName = "/";
+
+  if (rtcOK) {
+    DateTime now = rtc.now();
+    fileName += twoDigits(now.day()) + "_" + twoDigits(now.month()) + "_" + String(now.year());
+  }
+
+  fileName += "dato" + String(DEVICE_NAME);
+
+  if (sequenceNumber < 100) {
+    fileName += twoDigits(sequenceNumber);
+  } else {
+    fileName += String(sequenceNumber);
+  }
+
+  fileName += ".csv";
+  return fileName;
+}
+
+bool createNewLogFile() {
+  for (int sequenceNumber = 1; sequenceNumber <= 9999; sequenceNumber++) {
+    String candidateFileName = buildLogFileName(sequenceNumber);
+
+    if (!SD.exists(candidateFileName)) {
+      File dataFile = SD.open(candidateFileName, FILE_WRITE);
+      if (dataFile) {
+        dataFile.close();
+        dataLOG = candidateFileName;
+        Serial.println("Archivo nuevo SD: " + dataLOG);
+      } else {
+        Serial.println("Error al crear: " + candidateFileName);
+      }
+      return dataLOG.length() > 0;
+    }
+  }
+
+  Serial.println("No hay nombres disponibles para crear un archivo nuevo en SD.");
+  return false;
+}
+
 void setup() {
   // Inicializar Serial
   Serial.begin(115200);
@@ -573,6 +621,7 @@ void setup() {
   } else {
     sd_available = true;
     Serial.println("Tarjeta SD inicializada.");
+    sd_available = createNewLogFile();
     // Mostrar mensaje en OLED
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_5x7_tr);
