@@ -150,7 +150,7 @@ SPIClass spiSD(SPI);
 String dataString = "";// Variable para construir la línea de datos a guardar
 // Variables BLE
 #define VERSION "V0.02.2"
-#define DEVICE_NAME "HIRI-02" /////////////////////////// cambiar segun el numero de dispositivo ya esta cargada la configuracion del primer mensaje segun la tabla
+#define DEVICE_NAME "HIRI-01" /////////////////////////// cambiar segun el numero de dispositivo ya esta cargada la configuracion del primer mensaje segun la tabla
 String dataLOG = "";
 String id = DEVICE_NAME;
 
